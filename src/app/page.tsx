@@ -13,6 +13,8 @@ declare global {
   }
 }
 
+console.log(window);
+
 const INVOICE_ID = generateInvoiceId();
 const TERMINAL = "8911a14f-61a3-4449-a1c1-7a314ee5774c";
 const AMOUNT = 5.88;
@@ -20,7 +22,7 @@ const PAYMENT_DATA = getPaymentData();
 
 const IndexPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
-  const [modal, setModal] = useState(false);
+  // const [modal, setModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -52,7 +54,7 @@ const IndexPage: React.FC = () => {
     }
   };
 
-  const initializeHostedFields = (accessToken: string) => {
+  const initializeHostedFields = async (accessToken: string) => {
     const cardholderName = document.querySelector("#hf-name");
     const cardNumber = document.querySelector("#hf-number");
     const cardDate = document.querySelector("#hf-date");
@@ -78,7 +80,6 @@ const IndexPage: React.FC = () => {
       threeDSecureModalContent
     );
 
-    let hf: any;
     let attemptCount = 0,
       sendCallbackEveryFailedAttempt = 3;
 
@@ -95,92 +96,93 @@ const IndexPage: React.FC = () => {
       // return;
     }
 
-    window.dnaPayments.hostedFields
-      .create({
-        isTest: true,
-        accessToken: accessToken,
-        styles: {
-          input: {
-            "font-size": "14px",
-            "font-family": "Open Sans",
-          },
-          ".valid": {
-            color: "green",
-          },
-          ".invalid": {
-            color: "red",
-          },
+    const hf = await window.dnaPayments.hostedFields.create({
+      isTest: true,
+      accessToken: accessToken,
+      styles: {
+        input: {
+          "font-size": "14px",
+          "font-family": "Open Sans",
         },
-        threeDSecure: {
-          container: threeDSecureModalContent,
+        ".valid": {
+          color: "green",
         },
-        fontNames: ["Open Sans"],
-        fields: {
-          cardholderName: {
-            container: cardholderName,
-            placeholder: "Cardholder name",
-          },
-          cardNumber: {
-            container: cardNumber,
-            placeholder: "Card number",
-          },
-          expirationDate: {
-            container: cardDate,
-            placeholder: "Expiry date",
-          },
-          cvv: {
-            container: cardCvv,
-            placeholder: "CSC/CVV",
-          },
+        ".invalid": {
+          color: "red",
         },
-      })
-      .then((res) => {
-        hf = res;
+      },
+      threeDSecure: {
+        container: threeDSecureModalContent,
+      },
+      fontNames: ["Open Sans"],
+      fields: {
+        cardholderName: {
+          container: cardholderName,
+          placeholder: "Cardholder name",
+        },
+        cardNumber: {
+          container: cardNumber,
+          placeholder: "Card number",
+        },
+        expirationDate: {
+          container: cardDate,
+          placeholder: "Expiry date",
+        },
+        cvv: {
+          container: cardCvv,
+          placeholder: "CSC/CVV",
+        },
+      },
+    });
 
-        hf.on("dna-payments-three-d-secure-show", (data: any) => {
-          console.log("show", data);
-          setModal(true);
-        });
+    console.log("HFFFFFFF", hf);
+    // .then((res) => {
+    //   hf = res;
 
-        hf.on("dna-payments-three-d-secure-hide", () => {
-          console.log("hides");
-          setModal(false);
-        });
+    //   hf.on("dna-payments-three-d-secure-show", (data: any) => {
+    //     console.log("show", data);
+    //     setModal(true);
+    //   });
 
-        payBtn?.addEventListener("click", () => {
-          startLoading();
-          // clear();
-          // submits card data to pay
-          hf.submit({ paymentData: PAYMENT_DATA })
-            .then((res: any) => {
-              stopLoading();
-              hf.clear(); // Clears payment fields (Cardholder name, Credit card number, expiration date, cvv)
-              showResult(true);
-              console.log("res", res);
-            })
-            .catch((err: { code: string; message: string | undefined }) => {
-              stopLoading();
-              if (err.code === "NOT_VALID_CARD_DATA") {
-                showResult(false, err.message);
-              } else {
-                attemptCount++;
-                showResult(false, err.message);
-                if (
-                  sendCallbackEveryFailedAttempt &&
-                  attemptCount >= sendCallbackEveryFailedAttempt
-                ) {
-                  alert("Callback has been sent");
-                  attemptCount = 0;
-                }
-                hf.clear();
-              }
-              console.log("err", err);
-            });
-        });
-      })
-      .catch((e) => {
-        setError(JSON.stringify(e, null, 2));
-      });
+    //   hf.on("dna-payments-three-d-secure-hide", () => {
+    //     console.log("hides");
+    //     setModal(false);
+    //   });
+
+    //   payBtn?.addEventListener("click", () => {
+    //     startLoading();
+    //     // clear();
+    //     // submits card data to pay
+    //     hf.submit({ paymentData: PAYMENT_DATA })
+    //       .then((res: any) => {
+    //         stopLoading();
+    //         hf.clear(); // Clears payment fields (Cardholder name, Credit card number, expiration date, cvv)
+    //         showResult(true);
+    //         console.log("res", res);
+    //       })
+    //       .catch((err: { code: string; message: string | undefined }) => {
+    //         stopLoading();
+    //         if (err.code === "NOT_VALID_CARD_DATA") {
+    //           showResult(false, err.message);
+    //         } else {
+    //           attemptCount++;
+    //           showResult(false, err.message);
+    //           if (
+    //             sendCallbackEveryFailedAttempt &&
+    //             attemptCount >= sendCallbackEveryFailedAttempt
+    //           ) {
+    //             alert("Callback has been sent");
+    //             attemptCount = 0;
+    //           }
+    //           hf.clear();
+    //         }
+    //         console.log("err", err);
+    //       });
+    //   });
+    // })
+    // .catch((e) => {
+    //   setError(JSON.stringify(e, null, 2));
+    // });
   };
 
   const startLoading = () => {
@@ -247,33 +249,33 @@ const IndexPage: React.FC = () => {
         </div>
       </form>
 
-      {modal && (
-        <div
-          className="modal fade"
-          id="threeDSecureModal"
-          tabIndex={-1}
-          role="dialog"
-        >
-          <div className="modal-dialog" role="document">
-            <div className="modal-content">
-              <div className="modal-header">
-                <button
-                  type="button"
-                  className="close"
-                  data-dismiss="modal"
-                  aria-label="Close"
-                >
-                  <span aria-hidden="true">&times;</span>
-                </button>
-                <h4 className="modal-title" id="myModalLabel">
-                  Three D Secure
-                </h4>
-              </div>
-              <div className="modal-body" id="threeDSecureModalContent"></div>
+      {/* {modal && ( */}
+      <div
+        className="modal fade"
+        id="threeDSecureModal"
+        tabIndex={-1}
+        role="dialog"
+      >
+        <div className="modal-dialog" role="document">
+          <div className="modal-content">
+            <div className="modal-header">
+              <button
+                type="button"
+                className="close"
+                data-dismiss="modal"
+                aria-label="Close"
+              >
+                <span aria-hidden="true">&times;</span>
+              </button>
+              <h4 className="modal-title" id="myModalLabel">
+                Three D Secure
+              </h4>
             </div>
+            <div className="modal-body" id="threeDSecureModalContent"></div>
           </div>
         </div>
-      )}
+      </div>
+      {/* )} */}
     </div>
   );
 };
