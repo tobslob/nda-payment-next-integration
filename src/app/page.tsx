@@ -1,113 +1,329 @@
-import Image from "next/image";
+"use client";
+import { useEffect, useState } from "react";
+import axios from "axios";
+import Head from "next/head";
 
-export default function Home() {
+declare global {
+  interface Window {
+    dnaPayments: {
+      hostedFields: {
+        create: (options: any) => Promise<any>;
+      };
+    };
+  }
+}
+
+const INVOICE_ID = generateInvoiceId();
+const TERMINAL = "8911a14f-61a3-4449-a1c1-7a314ee5774c";
+const AMOUNT = 5.88;
+const PAYMENT_DATA = getPaymentData();
+
+const IndexPage: React.FC = () => {
+  const [loading, setLoading] = useState(false);
+  const [modal, setModal] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchToken();
+  }, []);
+
+  const fetchToken = async () => {
+    try {
+      const response = await axios.post(
+        "https://test-api.dnapayments.com/v1/oauth2/test-token",
+        {
+          terminal: TERMINAL,
+          invoiceId: INVOICE_ID,
+          amount: AMOUNT,
+          currency: "GBP",
+          scope:
+            "payment integration_hosted integration_embedded integration_seamless",
+        }
+      );
+      // Handle response here
+      console.log(response.data);
+      initializeHostedFields(response.data.access_token);
+    } catch (error) {
+      if (error instanceof Error) {
+        setError(error.message);
+      } else {
+        setError("An unknown error occurred.");
+      }
+    }
+  };
+
+  const initializeHostedFields = (accessToken: string) => {
+    const cardholderName = document.querySelector("#hf-name");
+    const cardNumber = document.querySelector("#hf-number");
+    const cardDate = document.querySelector("#hf-date");
+    const cardCvv = document.querySelector("#hf-cvv");
+    const successAlert = document.querySelector("#success");
+    const failedAlert = document.querySelector("#failed");
+    const errorsAlert = document.querySelector("#errors");
+
+    const threeDSecureModal = document.querySelector("#threeDSecureModal");
+    const threeDSecureModalContent = document.querySelector(
+      "#threeDSecureModalContent"
+    );
+
+    const payBtn = document.querySelector("#pay-btn");
+
+    console.log(
+      cardholderName,
+      cardNumber,
+      cardDate,
+      cardCvv,
+      payBtn,
+      threeDSecureModal,
+      threeDSecureModalContent
+    );
+
+    let hf: any;
+    let attemptCount = 0,
+      sendCallbackEveryFailedAttempt = 3;
+
+    if (
+      !cardholderName ||
+      !cardNumber ||
+      !cardDate ||
+      !cardCvv ||
+      !threeDSecureModal ||
+      !threeDSecureModalContent ||
+      !payBtn
+    ) {
+      console.error("Failed to find all required DOM elements.");
+      // return;
+    }
+
+    window.dnaPayments.hostedFields
+      .create({
+        isTest: true,
+        accessToken: accessToken,
+        styles: {
+          input: {
+            "font-size": "14px",
+            "font-family": "Open Sans",
+          },
+          ".valid": {
+            color: "green",
+          },
+          ".invalid": {
+            color: "red",
+          },
+        },
+        threeDSecure: {
+          container: threeDSecureModalContent,
+        },
+        fontNames: ["Open Sans"],
+        fields: {
+          cardholderName: {
+            container: cardholderName,
+            placeholder: "Cardholder name",
+          },
+          cardNumber: {
+            container: cardNumber,
+            placeholder: "Card number",
+          },
+          expirationDate: {
+            container: cardDate,
+            placeholder: "Expiry date",
+          },
+          cvv: {
+            container: cardCvv,
+            placeholder: "CSC/CVV",
+          },
+        },
+      })
+      .then((res) => {
+        hf = res;
+
+        hf.on("dna-payments-three-d-secure-show", (data: any) => {
+          console.log("show", data);
+          setModal(true);
+        });
+
+        hf.on("dna-payments-three-d-secure-hide", () => {
+          console.log("hides");
+          setModal(false);
+        });
+
+        payBtn?.addEventListener("click", () => {
+          startLoading();
+          // clear();
+          // submits card data to pay
+          hf.submit({ paymentData: PAYMENT_DATA })
+            .then((res: any) => {
+              stopLoading();
+              hf.clear(); // Clears payment fields (Cardholder name, Credit card number, expiration date, cvv)
+              showResult(true);
+              console.log("res", res);
+            })
+            .catch((err: { code: string; message: string | undefined }) => {
+              stopLoading();
+              if (err.code === "NOT_VALID_CARD_DATA") {
+                showResult(false, err.message);
+              } else {
+                attemptCount++;
+                showResult(false, err.message);
+                if (
+                  sendCallbackEveryFailedAttempt &&
+                  attemptCount >= sendCallbackEveryFailedAttempt
+                ) {
+                  alert("Callback has been sent");
+                  attemptCount = 0;
+                }
+                hf.clear();
+              }
+              console.log("err", err);
+            });
+        });
+      })
+      .catch((e) => {
+        setError(JSON.stringify(e, null, 2));
+      });
+  };
+
+  const startLoading = () => {
+    setLoading(true);
+  };
+
+  const stopLoading = () => {
+    setLoading(false);
+  };
+
+  const showResult = (isSuccess: boolean, text?: string) => {
+    if (isSuccess) {
+      alert("Payment was successful");
+    } else {
+      alert(text || "Payment was unsuccessful");
+    }
+  };
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">src/app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:size-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
-        </div>
-      </div>
-
-      <div className="relative z-[-1] flex place-items-center before:absolute before:h-[300px] before:w-full before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 sm:before:w-[480px] sm:after:w-[240px] before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
+    <div className="container mt-5">
+      <Head>
+        <title>DNA Payment</title>
+        <link
+          rel="stylesheet"
+          href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
         />
-      </div>
+      </Head>
+      <form className="container">
+        <h1>DNA PAYMENT</h1>
+        <br />
+        <div id="loader" className={loading ? "" : "hidden"}>
+          Loading token ....
+        </div>
+        <div id="hosted-fields" className={!loading ? "" : "hidden"}>
+          {/* Hosted fields and other HTML structure */}
 
-      <div className="mb-32 grid text-center lg:mb-0 lg:w-full lg:max-w-5xl lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
+          <div id="hf-name" className="form-control"></div>
 
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
+          <div id="hf-number" className="form-control"></div>
 
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Explore starter templates for Next.js.
-          </p>
-        </a>
+          <div id="hf-date" className="form-control"></div>
 
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
+          <div id="hf-cvv" className="form-control"></div>
+
+          <button
+            id="pay-btn"
+            className="btn btn-success"
+            type="submit"
+            value="Pay"
+          />
+        </div>
+        <div className="row">
+          <div id="success" className="alert alert-success hidden" role="alert">
+            Payment was successful
+          </div>
+          <div id="failed" className="alert alert-danger hidden" role="alert">
+            Payment was unsuccessful
+          </div>
+          <pre
+            id="errors"
+            className="alert alert-danger hidden"
+            role="alert"
+          ></pre>
+        </div>
+      </form>
+
+      {modal && (
+        <div
+          className="modal fade"
+          id="threeDSecureModal"
+          tabIndex={-1}
+          role="dialog"
         >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-balance text-sm opacity-50">
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
+          <div className="modal-dialog" role="document">
+            <div className="modal-content">
+              <div className="modal-header">
+                <button
+                  type="button"
+                  className="close"
+                  data-dismiss="modal"
+                  aria-label="Close"
+                >
+                  <span aria-hidden="true">&times;</span>
+                </button>
+                <h4 className="modal-title" id="myModalLabel">
+                  Three D Secure
+                </h4>
+              </div>
+              <div className="modal-body" id="threeDSecureModalContent"></div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
+};
+
+export default IndexPage;
+
+function generateInvoiceId() {
+  return new Date().getTime().toString();
+}
+
+function getPaymentData() {
+  return {
+    currency: "GBP",
+    description: "Car Service",
+    paymentSettings: {
+      terminalId: TERMINAL,
+      returnUrl: "https://test-pay.dnapayments.com/checkout/success.html",
+      failureReturnUrl:
+        "https://test-pay.dnapayments.com/checkout/failure.html",
+      callbackUrl: "https://pay.dnapayments.com/checkout",
+      failureCallbackUrl: "https://testmerchant/order/1123/fail",
+    },
+    customerDetails: {
+      accountDetails: {
+        accountId: "uuid000001",
+      },
+      billingAddress: {
+        firstName: "John",
+        lastName: "Doe",
+        addressLine1: "Fulham Rd",
+        postalCode: "SW6 1HS",
+        city: "London",
+        country: "GB",
+      },
+      deliveryDetails: {
+        deliveryAddress: {
+          firstName: "John",
+          lastName: "Doe",
+          addressLine1: "Fulham Rd",
+          addressLine2: "Fulham",
+          postalCode: "SW6 1HS",
+          city: "London",
+          phone: "0475662834",
+          country: "GB",
+        },
+      },
+      email: "demo@dnapayments.com",
+    },
+    deliveryType: "service",
+    invoiceId: INVOICE_ID,
+    amount: AMOUNT,
+  };
 }
